@@ -30,6 +30,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         cloned_controller.clone(),
     ));
 
+    spawn(ControllerService::run_periodic_job_checker(cloned_controller.clone()));
+
     sleep(Duration::from_secs(2)).await;
 
     let mut task = Struct::default();

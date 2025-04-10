@@ -71,7 +71,7 @@ impl RedisClient {
 
         self.redis
             .zadd::<String, f64, String, String>(
-                Self::get_periodic_set_name(queue_name.clone()),
+                String::from("PERIODICITY"),
                 task_id.clone(),
                 task_start_time as f64,
             )
