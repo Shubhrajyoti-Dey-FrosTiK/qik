@@ -1,7 +1,6 @@
 use super::controller::ControllerService;
 use crate::rpc::controller::ListenResponse;
 use anyhow::Result;
-use prost_types::Struct;
 use redis::client::{RedisClient, Update, UpdateType};
 use serde_json::from_str;
 use std::{
@@ -80,11 +79,11 @@ impl ControllerService {
         println!("RECEIVED {} TASKS", tasks.len());
 
         for task_idx in 0..tasks.len() {
-            let task = controller
+            let lease_time = controller
                 .lock()
                 .await
                 .db
-                .get_task_by_id(tasks.get(task_idx).unwrap().clone())
+                .get_lease_time_by_id(tasks.get(task_idx).unwrap().clone())
                 .await
                 .unwrap();
 
@@ -105,7 +104,7 @@ impl ControllerService {
                 .update(Update {
                     queue_name: update.queue_name.clone(),
                     task_id: update.task_id.clone(),
-                    to_be_consumed_at: update.to_be_consumed_at,
+                    to_be_consumed_at: Some(update.to_be_consumed_at.unwrap() + lease_time),
                     update_type: UpdateType::ItemLeased,
                 })
                 .await

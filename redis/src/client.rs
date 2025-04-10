@@ -80,6 +80,15 @@ impl RedisClient {
         Ok(task)
     }
 
+    pub async fn get_lease_time_by_id(&mut self, task_id: String) -> Result<u128> {
+        let lease_time: u128 = self
+            .redis
+            .get(&Self::get_lease_time_key(task_id.clone()))
+            .await
+            .unwrap();
+        Ok(lease_time)
+    }
+
     pub async fn add_scheduled_task(
         &mut self,
         queue_name: String,
