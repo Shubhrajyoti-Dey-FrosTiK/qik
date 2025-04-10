@@ -1,0 +1,37 @@
+syntax = "proto3";
+package controller;
+
+import "google/protobuf/struct.proto";
+
+option go_package = "client/proto";
+
+service Controller {
+    rpc ClientAddItem (AddJobRequest) returns (SuccessResponse);
+    rpc WorkerListen (ListenRequest) returns (stream JobStreamResponse);
+    rpc WorkerJobComplete (JobCompleteResponse) returns (SuccessResponse);
+}
+
+message AddJobRequest {
+    google.protobuf.Struct item = 1;
+    bool isPeriodic = 2;
+    int32 startTime = 3;
+    int32 endTime = 4;
+    int32 interval = 5;
+}
+
+message SuccessResponse {
+    bool success = 1;
+}
+
+message ListenRequest {
+    string queue_name = 1;
+}
+
+message JobStreamResponse {
+    string task_id = 1;
+    google.protobuf.Struct item = 2;
+}
+
+message JobCompleteResponse {
+    string result  = 1;
+}
