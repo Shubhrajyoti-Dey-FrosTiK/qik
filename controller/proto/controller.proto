@@ -5,6 +5,7 @@ import "google/protobuf/struct.proto";
 
 service Controller {
     rpc AddItem (AddItemRequest) returns (stream AddItemResponse);
+    rpc Listen (ListenRequest) returns (stream ListenResponse);
 }
 
 message AddItemRequest {
@@ -13,4 +14,13 @@ message AddItemRequest {
 
 message AddItemResponse {
     bool success = 1;
+}
+
+message ListenRequest {
+    string queue_name = 1;
+}
+
+message ListenResponse {
+    string task_id = 1;
+    google.protobuf.Struct item = 2;
 }
