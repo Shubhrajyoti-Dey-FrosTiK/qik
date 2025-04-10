@@ -8,18 +8,18 @@ use std::{
 };
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub enum UpdateType {
     AddItem,
     ItemLeased,
     ItemAcked,
 }
-#[derive(Serialize, Deserialize, Debug)]
+#[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct Update {
-    queue_name: String,
-    task_id: String,
-    update_type: UpdateType,
-    to_be_consumed_at: Option<u128>,
+    pub queue_name: String,
+    pub task_id: String,
+    pub update_type: UpdateType,
+    pub to_be_consumed_at: Option<u128>,
 }
 
 #[derive(Clone)]
@@ -104,7 +104,7 @@ impl RedisClient {
         Ok(())
     }
 
-    pub async fn get_task(&mut self, queue_name: String) -> Result<Option<String>> {
+    pub async fn get_tasks(&mut self, queue_name: String, no_of_tasks: i32) -> Result<Vec<String>> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .unwrap()
@@ -115,7 +115,8 @@ impl RedisClient {
             local queue_name = ARGV[1]
             local lease_queue_name = ARGV[2]
             local now = tonumber(ARGV[3])
-            local tasks = redis.call('ZRANGEBYSCORE', queue_name, '-inf', now, 'LIMIT', 0,  1)
+            local no_of_tasks = tonumber(ARGV[4])
+            local tasks = redis.call('ZRANGEBYSCORE', queue_name, '-inf', now, 'LIMIT', no_of_tasks,  1)
 
             for _, task in ipairs(tasks) do
                 local lease_time_key = 'LEASE_TIME:' .. task
@@ -128,41 +129,36 @@ impl RedisClient {
             ",
         );
 
-        let result = script
+        let task_ids = script
             .arg(queue_name.clone())
             .arg(lease_queue_name)
             .arg(now.to_string())
-            .arg(now.to_string())
+            .arg(no_of_tasks.to_string())
             .invoke::<Vec<String>>(&mut self.client)
             .unwrap();
 
-        let task_id = result.get(0);
+        for task_id in task_ids.clone() {
+            let lease_time: u128 = self
+                .redis
+                .get(Self::get_lease_time_key(task_id.clone()))
+                .await
+                .unwrap();
 
-        if task_id.is_none() {
-            return Ok(None);
+            self.client
+                .publish::<String, String, String>(
+                    String::from("UPDATE"),
+                    to_string(&Update {
+                        queue_name: queue_name.clone(),
+                        task_id: task_id.clone(),
+                        update_type: UpdateType::ItemLeased,
+                        to_be_consumed_at: Some(lease_time + now),
+                    })
+                    .unwrap(),
+                )
+                .unwrap();
         }
 
-        let task_id = task_id.unwrap().clone();
-        let lease_time: u128 = self
-            .redis
-            .get(Self::get_lease_time_key(task_id.clone()))
-            .await
-            .unwrap();
-
-        self.client
-            .publish::<String, String, String>(
-                String::from("UPDATE"),
-                to_string(&Update {
-                    queue_name,
-                    task_id: task_id.clone(),
-                    update_type: UpdateType::AddItem,
-                    to_be_consumed_at: Some(lease_time + now),
-                })
-                .unwrap(),
-            )
-            .unwrap();
-
-        return Ok(Some(task_id));
+        return Ok(task_ids);
     }
 
     pub async fn ack_task(&mut self, queue_name: String, task_id: String) -> Result<bool> {
