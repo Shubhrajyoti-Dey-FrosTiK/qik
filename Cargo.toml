@@ -1,6 +1,6 @@
 [workspace]
 resolver = "2"
-members = [ "client","controller", "redis"]
+members = [ "worker","controller", "redis"]
 
 [workspace.dependencies]
 anyhow = "1.0.97"
