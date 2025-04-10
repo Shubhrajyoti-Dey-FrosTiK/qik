@@ -50,17 +50,33 @@ impl Controller for ControllerService {
 
         let request = request.into_inner();
 
-        self.mutexed_db
-            .lock()
-            .await
-            .add_scheduled_task(
-                request.queue_name.clone(),
-                request.get_item_string().unwrap(),
-                request.start_time as u128,
-                request.lease_time as u128,
-            )
-            .await
-            .unwrap();
+        if request.is_periodic {
+            self.mutexed_db
+                .lock()
+                .await
+                .add_periodic_task(
+                    request.queue_name.clone(),
+                    request.get_item_string().unwrap(),
+                    request.lease_time as u128,
+                    request.start_time as u128,
+                    request.end_time as u128,
+                    request.interval as u128,
+                )
+                .await
+                .unwrap();
+        } else {
+            self.mutexed_db
+                .lock()
+                .await
+                .add_scheduled_task(
+                    request.queue_name.clone(),
+                    request.get_item_string().unwrap(),
+                    request.start_time as u128,
+                    request.lease_time as u128,
+                )
+                .await
+                .unwrap();
+        }
 
         let (tx, rx) = channel(128);
         tx.send(Ok(SuccessResponse { success: true }))
