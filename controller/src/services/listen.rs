@@ -1,5 +1,5 @@
 use super::controller::ControllerService;
-use crate::rpc::{controller::ListenResponse, util::string_to_struct};
+use crate::rpc::{controller::JobStreamResponse, util::string_to_struct};
 use anyhow::Result;
 use redis::client::{RedisClient, Update, UpdateType};
 use serde_json::from_str;
@@ -24,8 +24,8 @@ impl ControllerService {
             let server = server.clone();
 
             match update.update_type {
-                redis::client::UpdateType::AddItem => {
-                    spawn(ControllerService::handle_add_item(
+                redis::client::UpdateType::AddJob => {
+                    spawn(ControllerService::handle_add_job(
                         server.clone(),
                         controller.clone(),
                         update.clone(),
@@ -45,7 +45,7 @@ impl ControllerService {
         Ok(())
     }
 
-    pub async fn handle_add_item(
+    pub async fn handle_add_job(
         server: Arc<ControllerService>,
         controller: Arc<Mutex<ControllerService>>,
         update: Update,
@@ -101,7 +101,7 @@ impl ControllerService {
             subscribers
                 .get(task_idx)
                 .unwrap()
-                .send(Ok(ListenResponse {
+                .send(Ok(JobStreamResponse {
                     task_id: update.task_id.clone(),
                     item: Some(task),
                 }))

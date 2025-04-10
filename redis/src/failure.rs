@@ -50,7 +50,7 @@ impl RedisClient {
                 to_string(&Update {
                     queue_name,
                     task_id,
-                    update_type: UpdateType::AddItem,
+                    update_type: UpdateType::AddJob,
                     to_be_consumed_at: Some(now),
                 })
                 .unwrap(),
