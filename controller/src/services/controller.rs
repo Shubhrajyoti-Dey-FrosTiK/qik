@@ -1,5 +1,6 @@
 use crate::rpc::controller::{
-    controller_server::Controller, AddItemRequest, AddItemResponse, ListenRequest, ListenResponse,
+    controller_server::Controller, AddJobRequest, JobCompleteResponse, JobStreamResponse,
+    ListenRequest, SuccessResponse,
 };
 use anyhow::Result;
 use dashmap::DashMap;
@@ -19,7 +20,7 @@ use tonic::{Request, Response, Status};
 pub struct ControllerService {
     pub db: RedisClient,
     pub num_of_workers: Arc<Mutex<i32>>,
-    pub subscribers: Arc<DashMap<String, Vec<Sender<Result<ListenResponse, Status>>>>>,
+    pub subscribers: Arc<DashMap<String, Vec<Sender<Result<JobStreamResponse, Status>>>>>,
 }
 
 impl ControllerService {
@@ -36,28 +37,33 @@ type StreamResult<T> = Result<Response<T>, Status>;
 
 #[tonic::async_trait]
 impl Controller for ControllerService {
-    type AddItemStream = Pin<Box<dyn Stream<Item = Result<AddItemResponse, Status>> + Send>>;
-    type ListenStream = Pin<Box<dyn Stream<Item = Result<ListenResponse, Status>> + Send>>;
+    type ClientAddJobStream = Pin<Box<dyn Stream<Item = Result<SuccessResponse, Status>> + Send>>;
+    type WorkerListenStream = Pin<Box<dyn Stream<Item = Result<JobStreamResponse, Status>> + Send>>;
 
-    async fn add_item(
+    async fn client_add_job(
         &self,
-        request: Request<AddItemRequest>,
-    ) -> StreamResult<Self::AddItemStream> {
+        request: Request<AddJobRequest>,
+    ) -> StreamResult<Self::ClientAddJobStream> {
         println!("Got a request: {:?}", request);
 
         let item = request.into_inner().get_item_string().unwrap();
 
         let (tx, rx) = channel(128);
-        tx.send(Ok(AddItemResponse { success: true }))
+        tx.send(Ok(SuccessResponse { success: true }))
             .await
             .unwrap();
 
         let output_stream = ReceiverStream::new(rx);
 
-        Ok(Response::new(Box::pin(output_stream) as Self::AddItemStream))
+        Ok(Response::new(
+            Box::pin(output_stream) as Self::ClientAddJobStream
+        ))
     }
 
-    async fn listen(&self, request: Request<ListenRequest>) -> StreamResult<Self::ListenStream> {
+    async fn worker_listen(
+        &self,
+        request: Request<ListenRequest>,
+    ) -> StreamResult<Self::WorkerListenStream> {
         let (tx, rx) = channel(128);
         let queue_name = request.into_inner().queue_name;
         if self.subscribers.contains_key(&queue_name) {
@@ -72,6 +78,17 @@ impl Controller for ControllerService {
 
         let output_stream = ReceiverStream::new(rx);
 
-        Ok(Response::new(Box::pin(output_stream) as Self::ListenStream))
+        Ok(Response::new(
+            Box::pin(output_stream) as Self::WorkerListenStream
+        ))
+    }
+
+    async fn worker_job_complete(
+        &self,
+        request: Request<JobCompleteResponse>,
+    ) -> Result<Response<SuccessResponse>, Status> {
+        let reply = SuccessResponse { success: true };
+
+        Ok(Response::new(reply))
     }
 }

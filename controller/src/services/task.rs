@@ -3,7 +3,7 @@ use prost_types::Struct;
 use tokio::sync::mpsc::{Receiver, Sender};
 use tonic::Status;
 
-use crate::rpc::controller::ListenResponse;
+use crate::rpc::controller::JobStreamResponse;
 
 pub struct Task {
     pub task_id: String,
@@ -13,10 +13,10 @@ pub struct Task {
 impl Task {
     pub async fn get_task(
         rx: &mut Receiver<Self>,
-        tx: &mut Sender<Result<ListenResponse, Status>>,
+        tx: &mut Sender<Result<JobStreamResponse, Status>>,
     ) -> Result<()> {
         while let Some(task) = rx.blocking_recv() {
-            tx.send(Ok(ListenResponse {
+            tx.send(Ok(JobStreamResponse {
                 task_id: task.task_id,
                 item: Some(Struct {
                     ..Default::default()

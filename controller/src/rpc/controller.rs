@@ -3,7 +3,7 @@ use anyhow::Result;
 use serde_json::to_string;
 tonic::include_proto!("controller");
 
-impl AddItemRequest {
+impl AddJobRequest {
     pub fn get_item_string(&self) -> Result<String> {
         if self.item.is_none() {
             return Ok(String::new());

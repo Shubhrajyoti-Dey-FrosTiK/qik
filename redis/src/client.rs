@@ -14,7 +14,7 @@ use uuid::Uuid;
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub enum UpdateType {
     #[default]
-    AddItem,
+    AddJob,
     ItemLeased,
     ItemAcked,
 }
@@ -124,7 +124,7 @@ impl RedisClient {
                 to_string(&Update {
                     queue_name,
                     task_id,
-                    update_type: UpdateType::AddItem,
+                    update_type: UpdateType::AddJob,
                     to_be_consumed_at: Some(time + lease_time),
                 })
                 .unwrap(),
