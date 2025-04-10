@@ -1,14 +1,10 @@
 use std::{
     sync::Arc,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-use redis::client::Update;
 use rpc::controller::controller_server::ControllerServer;
-use tokio::{
-    spawn,
-    sync::{mpsc::channel, Mutex},
-};
+use tokio::{spawn, time::sleep};
 use tonic::transport::Server;
 pub mod rpc;
 pub mod services;
@@ -30,6 +26,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     spawn(ControllerService::run_background_triggers(
         cloned_controller.clone(),
     ));
+
+    sleep(Duration::from_secs(2)).await;
 
     controller
         .db

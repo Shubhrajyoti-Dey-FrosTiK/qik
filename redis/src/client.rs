@@ -123,7 +123,7 @@ impl RedisClient {
             local lease_queue_name = ARGV[2]
             local now = tonumber(ARGV[3])
             local no_of_tasks = tonumber(ARGV[4])
-            local tasks = redis.call('ZRANGEBYSCORE', queue_name, '-inf', now, 'LIMIT', no_of_tasks,  1)
+            local tasks = redis.call('ZRANGEBYSCORE', queue_name, '-inf', now, 'LIMIT', 0, no_of_tasks)
 
             for _, task in ipairs(tasks) do
                 local lease_time_key = 'LEASE_TIME:' .. task

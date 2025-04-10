@@ -8,7 +8,7 @@ use std::{pin::Pin, sync::Arc};
 use tokio::{
     spawn,
     sync::{
-        mpsc::{channel, Receiver, Sender},
+        mpsc::{channel, Sender},
         Mutex,
     },
 };
@@ -63,9 +63,11 @@ impl Controller for ControllerService {
         if self.subscribers.contains_key(&queue_name) {
             let mut subscribers = self.subscribers.get_mut(&queue_name).unwrap();
             subscribers.push(tx);
+            println!("{:#?}", self.subscribers);
         } else {
             self.subscribers.insert(queue_name, vec![tx]);
         }
+
         spawn(async { loop {} }); // Keep the client connected
 
         let output_stream = ReceiverStream::new(rx);

@@ -9,11 +9,7 @@ use super::controller::ControllerService;
 use anyhow::Result;
 use redis::client::{RedisClient, Update};
 use serde_json::from_str;
-use tokio::{
-    spawn,
-    sync::{mpsc::Sender, Mutex},
-    time::sleep,
-};
+use tokio::{spawn, sync::Mutex, time::sleep};
 use tokio_stream::StreamExt;
 
 impl ControllerService {
@@ -64,8 +60,6 @@ impl ControllerService {
         })
         .await;
 
-        println!("HELL");
-
         let subscriber = server.subscribers.get(&update.queue_name.clone());
         if subscriber.is_none() {
             println!("NO WORKERS CONNECTED");
@@ -77,7 +71,7 @@ impl ControllerService {
             .lock()
             .await
             .db
-            .get_tasks(update.queue_name, 2 as i32)
+            .get_tasks(update.queue_name, subscribers.len() as i32)
             .await
             .unwrap();
 
