@@ -1,14 +1,13 @@
+use super::controller::ControllerService;
+use crate::rpc::controller::ListenResponse;
+use anyhow::Result;
+use prost_types::Struct;
+use redis::client::{RedisClient, Update, UpdateType};
+use serde_json::from_str;
 use std::{
     sync::Arc,
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-
-use crate::rpc::controller::ListenResponse;
-
-use super::controller::ControllerService;
-use anyhow::Result;
-use redis::client::{RedisClient, Update};
-use serde_json::from_str;
 use tokio::{spawn, sync::Mutex, time::sleep};
 use tokio_stream::StreamExt;
 
@@ -34,7 +33,12 @@ impl ControllerService {
                     ));
                 }
 
-                redis::client::UpdateType::ItemAcked => {}
+                redis::client::UpdateType::ItemAcked => {
+                    spawn(ControllerService::handle_lease_item(
+                        controller.clone(),
+                        update.clone(),
+                    ));
+                }
                 redis::client::UpdateType::ItemLeased => {}
             }
         }
@@ -46,8 +50,6 @@ impl ControllerService {
         server: Arc<ControllerService>,
         controller: Arc<Mutex<ControllerService>>,
         update: Update,
-        // subscribers: Vec<Sender<Result<ListenResponse, Status>>>,
-        // server: Self,
     ) -> Result<()> {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -71,13 +73,21 @@ impl ControllerService {
             .lock()
             .await
             .db
-            .get_tasks(update.queue_name, subscribers.len() as i32)
+            .get_tasks(update.queue_name.clone(), subscribers.len() as i32)
             .await
             .unwrap();
 
         println!("RECEIVED {} TASKS", tasks.len());
 
         for task_idx in 0..tasks.len() {
+            let task = controller
+                .lock()
+                .await
+                .db
+                .get_task_by_id(tasks.get(task_idx).unwrap().clone())
+                .await
+                .unwrap();
+
             subscribers
                 .get(task_idx)
                 .unwrap()
@@ -87,7 +97,46 @@ impl ControllerService {
                 }))
                 .await
                 .unwrap();
+
+            controller
+                .lock()
+                .await
+                .db
+                .update(Update {
+                    queue_name: update.queue_name.clone(),
+                    task_id: update.task_id.clone(),
+                    to_be_consumed_at: update.to_be_consumed_at,
+                    update_type: UpdateType::ItemLeased,
+                })
+                .await
+                .unwrap();
         }
+
+        Ok(())
+    }
+
+    pub async fn handle_lease_item(
+        controller: Arc<Mutex<ControllerService>>,
+        update: Update,
+    ) -> Result<()> {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        sleep(if update.to_be_consumed_at.unwrap() >= now {
+            Duration::from_millis((update.to_be_consumed_at.unwrap() - now) as u64)
+        } else {
+            Duration::from_millis(0)
+        })
+        .await;
+
+        controller
+            .lock()
+            .await
+            .db
+            .handle_lease_timeout(update.queue_name, update.task_id)
+            .await
+            .unwrap();
 
         Ok(())
     }
