@@ -32,13 +32,13 @@ impl ControllerService {
                     ));
                 }
 
-                redis::client::UpdateType::ItemAcked => {
+                redis::client::UpdateType::ItemAcked => {}
+                redis::client::UpdateType::ItemLeased => {
                     spawn(ControllerService::handle_lease_item(
                         controller.clone(),
                         update.clone(),
                     ));
                 }
-                redis::client::UpdateType::ItemLeased => {}
             }
         }
 
