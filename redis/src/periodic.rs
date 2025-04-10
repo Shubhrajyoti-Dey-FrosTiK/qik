@@ -93,7 +93,7 @@ impl RedisClient {
                 local end_time_key = 'ITEM_END_TIME:' .. task
 
                 local interval = tonumber(redis.call('GET', interval_key))
-                local end_time = tonumber(redis.call('GET', end_time))
+                local end_time = tonumber(redis.call('GET', end_time_key))
 
 
                 -- artificially become a client and add to tasks
@@ -114,7 +114,7 @@ impl RedisClient {
 
         let acked = script
             .arg(Self::get_periodic_set_name(queue_name.clone()))
-            .arg(Self::get_lease_queue_name(queue_name.clone()))
+            .arg(queue_name)
             .arg(now.to_string())
             .invoke::<bool>(&mut self.client)
             .unwrap();
