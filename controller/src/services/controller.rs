@@ -11,18 +11,15 @@ use tokio::{
         mpsc::{self, Receiver, Sender},
         Mutex,
     },
-    time::sleep,
 };
 use tokio_stream::{wrappers::ReceiverStream, Stream};
 use tonic::{Request, Response, Status};
 
-use super::task::Task;
-
-#[derive(Debug)]
+#[derive(Clone)]
 pub struct ControllerService {
     pub db: RedisClient,
     pub num_of_workers: Arc<Mutex<i32>>,
-    pub subscribers: Mutex<DashMap<String, Vec<Sender<Result<ListenResponse, Status>>>>>,
+    pub subscribers: Arc<DashMap<String, Vec<Sender<Result<ListenResponse, Status>>>>>,
 }
 
 impl ControllerService {
@@ -30,7 +27,7 @@ impl ControllerService {
         Ok(Self {
             db: RedisClient::new().await.unwrap(),
             num_of_workers: Arc::new(Mutex::new(0)),
-            subscribers: Mutex::new(DashMap::new()),
+            subscribers: Arc::new(DashMap::new()),
         })
     }
 }
@@ -62,13 +59,12 @@ impl Controller for ControllerService {
 
     async fn listen(&self, request: Request<ListenRequest>) -> StreamResult<Self::ListenStream> {
         let (tx, rx) = mpsc::channel(128);
-        let subscibers = self.subscribers.lock().await;
         let queue_name = request.into_inner().queue_name;
-        if subscibers.contains_key(&queue_name) {
-            let mut subscibers = subscibers.get_mut(&queue_name).unwrap();
-            subscibers.push(tx);
+        if self.subscribers.contains_key(&queue_name) {
+            let mut subscribers = self.subscribers.get_mut(&queue_name).unwrap();
+            subscribers.push(tx);
         } else {
-            subscibers.insert(queue_name, vec![tx]);
+            self.subscribers.insert(queue_name, vec![tx]);
         }
         spawn(async { loop {} }); // Keep the client connected
 

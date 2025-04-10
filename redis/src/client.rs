@@ -1,15 +1,30 @@
 use anyhow::{Ok, Result};
-use redis::{aio::MultiplexedConnection, AsyncCommands, Client, Script};
+use redis::{aio::MultiplexedConnection, AsyncCommands, Client, Connection, Script};
+use serde::{Deserialize, Serialize};
+use serde_json::to_string;
 use std::{
     env,
     time::{SystemTime, UNIX_EPOCH},
 };
 use uuid::Uuid;
 
-#[derive(Clone, Debug)]
+#[derive(Serialize, Deserialize, Debug)]
+pub enum UpdateType {
+    AddItem,
+    ItemLeased,
+    ItemAcked,
+}
+#[derive(Serialize, Deserialize, Debug)]
+pub struct Update {
+    queue_name: String,
+    task_id: String,
+    update_type: UpdateType,
+}
+
+#[derive(Clone)]
 pub struct RedisClient {
-    client: Client,
-    redis: MultiplexedConnection,
+    pub client: Client,
+    pub redis: MultiplexedConnection,
 }
 
 impl RedisClient {
@@ -20,9 +35,20 @@ impl RedisClient {
             env::var("REDIS_PORT").unwrap()
         );
         let client = Client::open(connection_uri)?;
-        let redis: MultiplexedConnection = client.get_multiplexed_async_connection().await?;
+        let redis: MultiplexedConnection =
+            client.clone().get_multiplexed_async_connection().await?;
 
         Ok(Self { redis, client })
+    }
+
+    pub async fn get_connection() -> Result<Connection> {
+        let connection_uri = format!(
+            "redis://{}:{}",
+            env::var("REDIS_HOST").unwrap(),
+            env::var("REDIS_PORT").unwrap()
+        );
+        let client = Client::open(connection_uri)?;
+        Ok(client.get_connection().unwrap())
     }
 
     pub fn get_lease_time_key(item_id: String) -> String {
@@ -57,9 +83,23 @@ impl RedisClient {
             .await
             .unwrap();
         self.redis
-            .zadd::<String, i32, String, String>(queue_name, task_id, time)
+            .zadd::<String, i32, String, String>(queue_name.clone(), task_id.clone(), time)
             .await
             .unwrap();
+
+        self.redis
+            .publish::<String, String, String>(
+                String::from("UPDATE"),
+                to_string(&Update {
+                    queue_name,
+                    task_id,
+                    update_type: UpdateType::AddItem,
+                })
+                .unwrap(),
+            )
+            .await
+            .unwrap();
+
         Ok(())
     }
 
@@ -94,8 +134,6 @@ impl RedisClient {
             .arg(now.to_string())
             .invoke::<Vec<String>>(&mut self.client)
             .unwrap();
-
-        println!("{:#?}", result);
 
         let result = result.get(0);
 
@@ -133,13 +171,26 @@ impl RedisClient {
 
         let acked = script
             .arg(Self::get_lease_time_key(task_id.clone()))
-            .arg(Self::get_lease_queue_name(queue_name))
+            .arg(Self::get_lease_queue_name(queue_name.clone()))
             .arg(Self::get_item_key(task_id.clone()))
-            .arg(task_id)
+            .arg(task_id.clone())
             .invoke::<bool>(&mut self.client)
             .unwrap();
 
         println!("{:#?}", acked);
+
+        self.redis
+            .publish::<String, String, String>(
+                String::from("UPDATE"),
+                to_string(&Update {
+                    queue_name,
+                    task_id,
+                    update_type: UpdateType::ItemAcked,
+                })
+                .unwrap(),
+            )
+            .await
+            .unwrap();
 
         Ok(acked)
     }

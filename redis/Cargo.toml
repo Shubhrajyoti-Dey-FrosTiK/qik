@@ -8,3 +8,5 @@ redis = { workspace = true }
 anyhow = { workspace = true }
 uuid = { version = "1.16.0", features = ["v4"] }
 redis-lua = "0.4.0"
+serde_json = { workspace = true }
+serde = { workspace = true }

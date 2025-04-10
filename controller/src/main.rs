@@ -1,4 +1,7 @@
+use std::sync::Arc;
+
 use rpc::controller::controller_server::ControllerServer;
+use tokio::spawn;
 use tonic::transport::Server;
 pub mod rpc;
 pub mod services;
@@ -11,26 +14,29 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let addr = "[::1]:50051".parse()?;
     let mut controller = ControllerService::new().await.unwrap();
 
-    // controller
-    //     .db
-    //     .add_scheduled_task(String::from("queue1"), String::from("task1"), 0, 10000)
-    //     .await
-    //     .unwrap();
+    let controller_clone = Arc::new(controller.clone());
+    spawn(async move { controller_clone.run_background_triggers().await.unwrap() });
 
-    // controller
-    //     .db
-    //     .get_task(String::from("queue1"))
-    //     .await
-    //     .unwrap();
+    controller
+        .db
+        .add_scheduled_task(String::from("queue1"), String::from("task1"), 0, 10000)
+        .await
+        .unwrap();
 
-    // controller
-    // .db
-    // .ack_task(
-    //     String::from("queue1"),
-    //     String::from("659ca1a9-be95-47b8-97e8-d5b0ebb0ddc1"),
-    // )
-    // .await
-    // .unwrap();
+    controller
+        .db
+        .get_task(String::from("queue1"))
+        .await
+        .unwrap();
+
+    controller
+        .db
+        .ack_task(
+            String::from("queue1"),
+            String::from("659ca1a9-be95-47b8-97e8-d5b0ebb0ddc1"),
+        )
+        .await
+        .unwrap();
 
     Server::builder()
         .add_service(ControllerServer::new(controller))

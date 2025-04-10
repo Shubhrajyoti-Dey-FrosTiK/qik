@@ -1590,6 +1590,8 @@ dependencies = [
  "anyhow",
  "redis 0.29.5",
  "redis-lua",
+ "serde",
+ "serde_json",
  "uuid 1.16.0",
 ]
 

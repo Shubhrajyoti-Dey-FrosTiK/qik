@@ -15,7 +15,7 @@ impl Task {
         rx: &mut Receiver<Self>,
         tx: &mut Sender<Result<ListenResponse, Status>>,
     ) -> Result<()> {
-        for task in rx.blocking_recv() {
+        while let Some(task) = rx.blocking_recv() {
             tx.send(Ok(ListenResponse {
                 task_id: task.task_id,
                 item: Some(Struct {
