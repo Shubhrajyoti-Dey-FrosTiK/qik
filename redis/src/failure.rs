@@ -12,7 +12,7 @@ impl RedisClient {
     ) -> Result<()> {
         let is_task_present: bool = self
             .redis
-            .exists(&Self::get_item_key(task_id.clone()))
+            .hexists(Self::get_item_prefix(), task_id.clone())
             .await
             .unwrap();
         if !is_task_present {

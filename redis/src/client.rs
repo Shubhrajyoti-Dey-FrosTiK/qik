@@ -59,22 +59,22 @@ impl RedisClient {
         Ok(pubsub)
     }
 
-    pub fn get_lease_time_key(item_id: String) -> String {
-        format!("LEASE_TIME:{}", item_id)
-    }
-
-    pub fn get_item_key(item_id: String) -> String {
-        format!("ITEM:{}", item_id)
-    }
-
     pub fn get_lease_queue_name(queue_name: String) -> String {
         format!("LEASE_SETS:{}", queue_name)
+    }
+
+    pub fn get_item_prefix() -> String {
+        String::from("ITEM")
+    }
+
+    pub fn get_lease_time_prefix() -> String {
+        String::from("LEASE_TIME")
     }
 
     pub async fn get_task_by_id(&mut self, task_id: String) -> Result<String> {
         let task: String = self
             .redis
-            .get(&Self::get_item_key(task_id.clone()))
+            .hget(&Self::get_item_prefix(), task_id.clone())
             .await
             .unwrap();
         Ok(task)
@@ -83,7 +83,7 @@ impl RedisClient {
     pub async fn get_lease_time_by_id(&mut self, task_id: String) -> Result<u128> {
         let lease_time: u128 = self
             .redis
-            .get(&Self::get_lease_time_key(task_id.clone()))
+            .hget(&Self::get_lease_time_prefix(), task_id.clone())
             .await
             .unwrap();
         Ok(lease_time)
@@ -98,12 +98,17 @@ impl RedisClient {
     ) -> Result<()> {
         let task_id = Uuid::new_v4().to_string();
         self.redis
-            .set::<String, String, String>(Self::get_item_key(task_id.clone()), task.clone())
+            .hset::<String, String, String, String>(
+                Self::get_item_prefix(),
+                task_id.clone(),
+                task.clone(),
+            )
             .await
             .unwrap();
         self.redis
-            .set::<String, String, String>(
-                Self::get_lease_time_key(task_id.clone()),
+            .hset::<String, String, String, String>(
+                Self::get_lease_time_prefix(),
+                task_id.clone(),
                 lease_time.to_string(),
             )
             .await
@@ -139,13 +144,13 @@ impl RedisClient {
             r"
             local queue_name = ARGV[1]
             local lease_queue_name = ARGV[2]
-            local now = tonumber(ARGV[3])
-            local no_of_tasks = tonumber(ARGV[4])
+            local lease_time_prefix = ARGV[3]
+            local now = tonumber(ARGV[4])
+            local no_of_tasks = tonumber(ARGV[5])
             local tasks = redis.call('ZRANGEBYSCORE', queue_name, '-inf', now, 'LIMIT', 0, no_of_tasks)
 
             for _, task in ipairs(tasks) do
-                local lease_time_key = 'LEASE_TIME:' .. task
-                local lease_time = tonumber(redis.call('GET', lease_time_key))
+                local lease_time = tonumber(redis.call('HGET', lease_time_prefix, task))
                 redis.call('ZREM', queue_name, task)
                 redis.call('ZADD', lease_queue_name, now + lease_time, task)
             end
@@ -157,6 +162,7 @@ impl RedisClient {
         let task_ids = script
             .arg(queue_name.clone())
             .arg(lease_queue_name)
+            .arg(Self::get_lease_time_prefix())
             .arg(now.to_string())
             .arg(no_of_tasks.to_string())
             .invoke::<Vec<String>>(&mut self.client)
@@ -165,7 +171,7 @@ impl RedisClient {
         for task_id in task_ids.clone() {
             let lease_time: u128 = self
                 .redis
-                .get(Self::get_lease_time_key(task_id.clone()))
+                .hget(Self::get_lease_time_prefix(), task_id.clone())
                 .await
                 .unwrap();
 
@@ -189,7 +195,7 @@ impl RedisClient {
     pub async fn ack_task(&mut self, queue_name: String, task_id: String) -> Result<bool> {
         let is_task_present: bool = self
             .redis
-            .exists(&Self::get_item_key(task_id.clone()))
+            .hexists(&Self::get_item_prefix(), task_id.clone())
             .await
             .unwrap();
         if !is_task_present {
@@ -198,23 +204,23 @@ impl RedisClient {
 
         let script = Script::new(
             r"
-            local lease_time_key = ARGV[1]
-            local lease_sets_key = ARGV[2]
-            local item_key = ARGV[3]
+            local lease_time_prefix = ARGV[1]
+            local lease_queue_name = ARGV[2]
+            local item_prefix = ARGV[3]
             local task_id = ARGV[4]
 
-            redis.call('DEL', lease_time_key)
-            redis.call('DEL', item_key)
-            redis.call('ZREM', lease_sets_key, task_id)
+            redis.call('HDEL', lease_time_prefix, task_id)
+            redis.call('HDEL', item_prefix, task_id)
+            redis.call('ZREM', lease_queue_name, task_id)
 
             return true
             ",
         );
 
         let acked = script
-            .arg(Self::get_lease_time_key(task_id.clone()))
+            .arg(Self::get_lease_time_prefix())
             .arg(Self::get_lease_queue_name(queue_name.clone()))
-            .arg(Self::get_item_key(task_id.clone()))
+            .arg(Self::get_item_prefix())
             .arg(task_id.clone())
             .invoke::<bool>(&mut self.client)
             .unwrap();

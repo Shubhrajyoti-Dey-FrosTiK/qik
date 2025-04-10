@@ -10,13 +10,16 @@ impl RedisClient {
     pub fn get_periodic_set_name(queue_name: String) -> String {
         format!("PERIODIC_SETS:{}", queue_name)
     }
-
-    pub fn get_item_period_end_time(queue_name: String) -> String {
-        format!("ITEM_END_TIME:{}", queue_name)
-    }
-
     pub fn get_item_period_interval(queue_name: String) -> String {
         format!("ITEM_INTERVAL:{}", queue_name)
+    }
+
+    pub fn get_periodic_end_time_prefix() -> String {
+        "PERIODIC_END_TIME".to_string()
+    }
+
+    pub fn get_periodic_interval_prefix() -> String {
+        "PERIODIC_INTERVAL".to_string()
     }
 
     pub async fn add_periodic_task(
@@ -32,28 +35,35 @@ impl RedisClient {
 
         // save task_id -> task, task_id -> lease_time, task_id -> end_time, task_id -> interval
         self.redis
-            .set::<String, String, String>(Self::get_item_key(task_id.clone()), task.clone())
+            .hset::<String, String, String, String>(
+                Self::get_item_prefix(),
+                task_id.clone(),
+                task.clone(),
+            )
             .await
             .unwrap();
         self.redis
-            .set::<String, String, String>(
-                Self::get_lease_time_key(task_id.clone()),
+            .hset::<String, String, String, String>(
+                Self::get_lease_time_prefix(),
+                task_id.clone(),
                 lease_time.to_string(),
             )
             .await
             .unwrap();
 
         self.redis
-            .set::<String, String, String>(
-                Self::get_item_period_end_time(task_id.clone()),
+            .hset::<String, String, String, String>(
+                Self::get_periodic_end_time_prefix(),
+                task_id.clone(),
                 task_end_time.to_string(),
             )
             .await
             .unwrap();
 
         self.redis
-            .set::<String, String, String>(
-                Self::get_item_period_interval(task_id.clone()),
+            .hset::<String, String, String, String>(
+                Self::get_periodic_interval_prefix(),
+                task_id.clone(),
                 task_interval.to_string(),
             )
             .await
