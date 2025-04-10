@@ -7,6 +7,7 @@ impl ControllerService {
     pub async fn run_background_triggers<'a>(&'a self) -> Result<Self> {
         let mut conn = RedisClient::get_connection().await.unwrap();
         let mut pubsub = conn.as_pubsub();
+        pubsub.subscribe("UPDATE").unwrap();
         loop {
             let msg = pubsub.get_message()?;
             let payload: String = msg.get_payload()?;

@@ -17,6 +17,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let controller_clone = Arc::new(controller.clone());
     spawn(async move { controller_clone.run_background_triggers().await.unwrap() });
 
+    println!("HELLO");
+
     controller
         .db
         .add_scheduled_task(String::from("queue1"), String::from("task1"), 0, 10000)
