@@ -19,6 +19,7 @@ use tonic::{Request, Response, Status};
 #[derive(Clone)]
 pub struct ControllerService {
     pub db: RedisClient,
+    pub mutexed_db: Arc<Mutex<RedisClient>>,
     pub num_of_workers: Arc<Mutex<i32>>,
     pub subscribers: Arc<DashMap<String, Vec<Sender<Result<JobStreamResponse, Status>>>>>,
 }
@@ -27,6 +28,7 @@ impl ControllerService {
     pub async fn new() -> Result<Self> {
         Ok(Self {
             db: RedisClient::new().await.unwrap(),
+            mutexed_db: Arc::new(Mutex::new(RedisClient::new().await.unwrap())),
             num_of_workers: Arc::new(Mutex::new(0)),
             subscribers: Arc::new(DashMap::new()),
         })
@@ -46,7 +48,19 @@ impl Controller for ControllerService {
     ) -> StreamResult<Self::ClientAddJobStream> {
         println!("Got a request: {:?}", request);
 
-        let item = request.into_inner().get_item_string().unwrap();
+        let request = request.into_inner();
+
+        self.mutexed_db
+            .lock()
+            .await
+            .add_scheduled_task(
+                request.queue_name.clone(),
+                request.get_item_string().unwrap(),
+                request.start_time as u128,
+                request.lease_time as u128,
+            )
+            .await
+            .unwrap();
 
         let (tx, rx) = channel(128);
         tx.send(Ok(SuccessResponse { success: true }))
