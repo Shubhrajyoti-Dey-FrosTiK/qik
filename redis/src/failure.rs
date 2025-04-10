@@ -38,7 +38,7 @@ impl RedisClient {
 
         script
             .arg(Self::get_lease_queue_name(task_id.clone()))
-            .arg(queue_name.clone())
+            .arg(Self::get_insert_queue_name(queue_name.clone()))
             .arg(task_id.clone())
             .arg(now.to_string())
             .invoke::<()>(&mut self.client)

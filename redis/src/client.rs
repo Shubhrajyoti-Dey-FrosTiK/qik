@@ -71,6 +71,10 @@ impl RedisClient {
         String::from("LEASE_TIME")
     }
 
+    pub fn get_insert_queue_name(queue_name: String) -> String {
+        format!("INSERT_QUEUE:{}", queue_name)
+    }
+
     pub async fn get_task_by_id(&mut self, task_id: String) -> Result<String> {
         let task: String = self
             .redis
@@ -114,7 +118,11 @@ impl RedisClient {
             .await
             .unwrap();
         self.redis
-            .zadd::<String, f64, String, String>(queue_name.clone(), task_id.clone(), time as f64)
+            .zadd::<String, f64, String, String>(
+                Self::get_insert_queue_name(queue_name.clone()),
+                task_id.clone(),
+                time as f64,
+            )
             .await
             .unwrap();
 
@@ -160,7 +168,7 @@ impl RedisClient {
         );
 
         let task_ids = script
-            .arg(queue_name.clone())
+            .arg(Self::get_insert_queue_name(queue_name.clone()))
             .arg(lease_queue_name)
             .arg(Self::get_lease_time_prefix())
             .arg(now.to_string())
