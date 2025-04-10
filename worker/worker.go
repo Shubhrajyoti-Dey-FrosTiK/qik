@@ -6,9 +6,9 @@ import (
 	"log"
 	"time"
 
-	pb "client/proto"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	pb "worker/proto"
 )
 
 var (
@@ -39,7 +39,7 @@ func main() {
 			break
 		}
 
-		time.Sleep(10)
+		time.Sleep(time.Second * 10)
 		log.Println("{}", p.Item)
 	}
 
