@@ -3,7 +3,10 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+use controller::rpc::util::struct_to_json;
+use prost_types::{Struct, Value};
 use rpc::controller::controller_server::ControllerServer;
+use serde_json::to_string;
 use tokio::{spawn, time::sleep};
 use tonic::transport::Server;
 pub mod rpc;
@@ -29,9 +32,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
 
     sleep(Duration::from_secs(2)).await;
 
+    let mut task = Struct::default();
+    task.fields
+        .insert(String::from("a"), Value::from(String::from("12")));
     controller
         .db
-        .add_scheduled_task(String::from("queue1"), String::from("task1"), now, 10000)
+        .add_scheduled_task(
+            String::from("queue1"),
+            to_string(&struct_to_json(&task)).unwrap(),
+            now,
+            10000,
+        )
         .await
         .unwrap();
 

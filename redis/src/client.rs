@@ -1,7 +1,7 @@
 use anyhow::{Ok, Result};
 use redis::{
     aio::{MultiplexedConnection, PubSub},
-    AsyncCommands, Client, Commands, Connection, Script,
+    AsyncCommands, Client, Commands, Script,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::to_string;
