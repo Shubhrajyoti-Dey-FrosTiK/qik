@@ -3,6 +3,7 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+use redis::client::Update;
 use rpc::controller::controller_server::ControllerServer;
 use tokio::{
     spawn,
@@ -23,20 +24,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .duration_since(UNIX_EPOCH)
         .unwrap()
         .as_millis();
-    let (tx, mut rx) = channel(128);
+    // let rx = Arc::new(Mutex::new(rx));
     let cloned_controller = Arc::new(controller.clone());
 
-    spawn(ControllerService::run_background_triggers(tx));
-    spawn(ControllerService::run_background_listeners(
-        &mut rx,
+    spawn(ControllerService::run_background_triggers(
         cloned_controller.clone(),
     ));
 
-    println!("HELLO");
-
     controller
         .db
-        .add_scheduled_task(String::from("queue1"), String::from("task1"), now, 0)
+        .add_scheduled_task(String::from("queue1"), String::from("task1"), now, 10000)
         .await
         .unwrap();
 

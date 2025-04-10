@@ -19,6 +19,7 @@ redis = { path = "../redis" }
 tokio-stream = "0.1.17"
 uuid = "1.16.0"
 dashmap = "6.1.0"
+redis-async = "0.17.2"
 
 [build-dependencies]
 tonic-build = "*"

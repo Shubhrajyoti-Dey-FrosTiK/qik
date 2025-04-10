@@ -1,5 +1,8 @@
 use anyhow::{Ok, Result};
-use redis::{aio::MultiplexedConnection, AsyncCommands, Client, Commands, Connection, Script};
+use redis::{
+    aio::{MultiplexedConnection, PubSub},
+    AsyncCommands, Client, Commands, Connection, Script,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::to_string;
 use std::{
@@ -8,13 +11,14 @@ use std::{
 };
 use uuid::Uuid;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub enum UpdateType {
+    #[default]
     AddItem,
     ItemLeased,
     ItemAcked,
 }
-#[derive(Serialize, Deserialize, Debug, Clone)]
+#[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct Update {
     pub queue_name: String,
     pub task_id: String,
@@ -42,14 +46,17 @@ impl RedisClient {
         Ok(Self { redis, client })
     }
 
-    pub async fn get_connection() -> Result<Connection> {
+    pub async fn get_pubsub() -> Result<PubSub> {
         let connection_uri = format!(
             "redis://{}:{}",
             env::var("REDIS_HOST").unwrap(),
             env::var("REDIS_PORT").unwrap()
         );
+        // let client = Client::open(connection_uri)?;
         let client = Client::open(connection_uri)?;
-        Ok(client.get_connection().unwrap())
+        let pubsub = client.get_async_pubsub().await.unwrap();
+
+        Ok(pubsub)
     }
 
     pub fn get_lease_time_key(item_id: String) -> String {
