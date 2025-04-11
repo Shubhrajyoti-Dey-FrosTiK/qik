@@ -10,9 +10,6 @@ impl RedisClient {
     pub fn get_periodic_set_name(queue_name: String) -> String {
         format!("PERIODIC_SETS:{}", queue_name)
     }
-    pub fn get_item_period_interval(queue_name: String) -> String {
-        format!("ITEM_INTERVAL:{}", queue_name)
-    }
 
     pub fn get_periodic_end_time_prefix() -> String {
         "PERIODIC_END_TIME".to_string()
@@ -29,7 +26,7 @@ impl RedisClient {
         lease_time: u128,
         task_start_time: u128,
         task_end_time: u128,
-        task_interval: u128,
+        task_interval: u128
     ) -> Result<bool> {
         let task_id = Uuid::new_v4().to_string();
 
@@ -71,7 +68,7 @@ impl RedisClient {
 
         self.redis
             .zadd::<String, f64, String, String>(
-                String::from("PERIODICITY"),
+                Self::get_periodic_set_name(String::from("PERIODICITY")),
                 task_id.clone(),
                 task_start_time as f64,
             )
@@ -90,47 +87,49 @@ impl RedisClient {
         let script = Script::new(
             r"
             local periodic_set_name = ARGV[1]
-            local queue_name = ARGV[2]
-            local now = tonumber(ARGV[3])
+            local now = tonumber(ARGV[2])
 
             local tasksDue = redis.call('ZRANGEBYSCORE', periodic_set_name, '-inf', now, 'WITHSCORES')
+            local tasksToQueue = {}
 
             for i = 1, #tasksDue, 2 do
                 local task = tasksDue[i]
-                local current_start_time = tonumber(tasksDue[i+1]) -- This is the score that triggered the run
+                local current_start_time = tonumber(tasksDue[i+1])
 
-                local interval_key = 'ITEM_INTERVAL:' .. task
-                local end_time_key = 'ITEM_END_TIME:' .. task
+                local interval_key = 'PERIODIC_INTERVAL:' .. task
+                local end_time_key = 'PERIODIC_END_TIME:' .. task
 
-                local interval = tonumber(redis.call('GET', interval_key))
-                local end_time = tonumber(redis.call('GET', end_time_key))
-
-
-                -- artificially become a client and add to tasks
-                redis.call('ZADD', queue_name, current_start_time, task)
+                local interval = tonumber(redis.call('HGET', 'PERIODIC_INTERVAL', task))
+                local end_time = tonumber(redis.call('HGET', 'PERIODIC_END_TIME', task))
 
                 -- update the current_start_time to current
                 local next_start_time = current_start_time + interval
+
                 if next_start_time <= end_time then
                     redis.call('ZADD', periodic_set_name, next_start_time, task)
+                    table.insert(tasksToQueue, task)
                 else
                     redis.call('ZREM', periodic_set_name, task)
                 end
             end
 
-            return true
+            return tasksToQueue
             ",
         );
 
-        let acked = script
+        let tasks_to_add = script
             .arg(Self::get_periodic_set_name(queue_name.clone()))
-            .arg(queue_name)
             .arg(now.to_string())
-            .invoke::<bool>(&mut self.client)
+            .invoke::<Vec<String>>(&mut self.client)
             .unwrap();
 
-        println!("{:#?}", acked);
+        for task in tasks_to_add {
+            println!("Scheduled {}", task);
+            self.add_scheduled_task(queue_name.clone(), task, now, 10000)
+                .await
+                .unwrap();
+        }
 
-        Ok(acked)
+        Ok(true)
     }
 }

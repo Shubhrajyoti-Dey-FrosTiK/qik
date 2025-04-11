@@ -30,7 +30,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         cloned_controller.clone(),
     ));
 
-    spawn(ControllerService::run_periodic_job_checker(cloned_controller.clone()));
+    spawn(ControllerService::run_periodic_job_checker(
+        cloned_controller.clone(),
+    ));
 
     sleep(Duration::from_secs(2)).await;
 
@@ -44,6 +46,19 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
             to_string(&struct_to_json(&task)).unwrap(),
             now,
             10000,
+        )
+        .await
+        .unwrap();
+
+    controller
+        .db
+        .add_periodic_task(
+            String::from("PERIODICITY"),
+            String::from("something"),
+            10000,
+            now,
+            now + 10000,
+            4000,
         )
         .await
         .unwrap();

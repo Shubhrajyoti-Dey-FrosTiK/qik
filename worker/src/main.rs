@@ -26,7 +26,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         let ack_job = client.worker_job_complete(ack_job_request).await.unwrap();
 
         if ack_job.into_inner().success {
-            println!("ACKED JOB{}", task_id);
+            println!("ACKED JOB {}", task_id);
         }
     }
     Ok(())
