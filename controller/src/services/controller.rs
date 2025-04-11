@@ -118,6 +118,14 @@ impl Controller for ControllerService {
         request: Request<JobCompleteResponse>,
     ) -> Result<Response<SuccessResponse>, Status> {
         let reply = SuccessResponse { success: true };
+        let request = request.into_inner();
+
+        self.mutexed_db
+            .lock()
+            .await
+            .ack_task(request.queue_name, request.task_id)
+            .await
+            .unwrap();
 
         Ok(Response::new(reply))
     }

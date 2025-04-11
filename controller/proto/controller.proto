@@ -29,9 +29,12 @@ message ListenRequest {
 
 message JobStreamResponse {
     string task_id = 1;
-    google.protobuf.Struct item = 2;
+    string queue_name = 2;
+    google.protobuf.Struct item = 3;
 }
 
 message JobCompleteResponse {
-    string result  = 1;
+    string queue_name = 1;
+    string task_id = 2;
+    string result  = 3;
 }

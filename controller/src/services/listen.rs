@@ -102,6 +102,7 @@ impl ControllerService {
                 .get(task_idx)
                 .unwrap()
                 .send(Ok(JobStreamResponse {
+                    queue_name: update.queue_name.clone(),
                     task_id: update.task_id.clone(),
                     item: Some(task),
                 }))
